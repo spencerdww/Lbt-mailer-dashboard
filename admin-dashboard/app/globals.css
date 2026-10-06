@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply min-h-screen bg-mist text-ink antialiased;
+  font-family: Manrope, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+input,
+button,
+select,
+textarea {
+  font: inherit;
+}

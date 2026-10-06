@@ -1,0 +1,11 @@
+{
+  "name": "lifebacktax",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix admin-dashboard",
+    "dev:api": "npm run dev --prefix backend",
+    "dev:admin": "npm run dev --prefix admin-dashboard",
+    "start:api": "npm start --prefix backend",
+    "start:admin": "npm start --prefix admin-dashboard"
+  }
+}
