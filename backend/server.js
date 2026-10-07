@@ -848,6 +848,24 @@ app.get('/api/customers', auth, async (_req, res) => {
   }
 });
 
+app.post('/api/customers/bulk-delete', auth, async (req, res) => {
+  try {
+    const rawCodes = Array.isArray(req.body && req.body.codes) ? req.body.codes : [];
+    const codes = [...new Set(rawCodes.map((value) => sanitizeCode(value)).filter((code) => code && code.length <= 128))].slice(0, 500);
+    if (!codes.length) {
+      return res.status(400).json({ message: 'Select at least one client' });
+    }
+
+    const result = await Customer.deleteMany({ code: { $in: codes } });
+    await NoticeFile.deleteMany({ code: { $in: codes } });
+    await ImportHistory.updateMany({ codes: { $in: codes } }, { $pull: { codes: { $in: codes } } });
+    return res.json({ removed: result.deletedCount || 0, codes });
+  } catch (err) {
+    console.error('[lifebacktax] Bulk remove failed:', err.message);
+    return res.status(500).json({ message: 'Unable to remove the selected clients' });
+  }
+});
+
 app.delete('/api/customers/:code', auth, async (req, res) => {
   try {
     const code = sanitizeCode(req.params.code);
@@ -860,6 +878,7 @@ app.delete('/api/customers/:code', auth, async (req, res) => {
       return res.status(404).json({ message: 'That client could not be found' });
     }
 
+    await NoticeFile.deleteMany({ code });
     await ImportHistory.updateMany({ codes: code }, { $pull: { codes: code } });
     return res.json({ message: 'Client removed', code });
   } catch (err) {
