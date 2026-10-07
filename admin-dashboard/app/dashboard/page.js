@@ -43,6 +43,12 @@ function noticeKind(value) {
   return 'file';
 }
 
+function hasNotice(value) {
+  const url = String(value || '').trim();
+  if (!url || url.toLowerCase() === 'notice_file_url') return false;
+  return url.startsWith('https://');
+}
+
 function downloadUrl(value) {
   const url = String(value || '').trim();
   if (!url) return '';
@@ -260,7 +266,7 @@ export default function RecordsPage() {
                         {displayName(record)}
                       </button>
                       <p className="mt-1 text-xs text-slate-500">{text(record.filingType)}</p>
-                      {record.noticeFileUrl ? (
+                      {hasNotice(record.noticeFileUrl) ? (
                         <p className="mt-1 text-xs font-semibold text-teal">Notice attached</p>
                       ) : null}
                     </td>
@@ -349,7 +355,7 @@ export default function RecordsPage() {
               <div className="rounded-xl border border-slate-200 p-3">
                 <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notice file</dt>
                 <dd className="mt-2">
-                  {selected.noticeFileUrl ? (
+                  {hasNotice(selected.noticeFileUrl) ? (
                     <div className="space-y-3">
                       {noticeKind(selected.noticeFileUrl) === 'image' ? (
                         <img
