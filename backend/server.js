@@ -208,7 +208,7 @@ function sanitizeCode(value) {
 
 function safeNoticeUrl(value) {
   const text = typeof value === 'string' ? value.trim() : '';
-  if (!text || text.length > 2000) return '';
+  if (!text || text.length > 2000 || text.toLowerCase() === 'notice_file_url') return '';
   try {
     const url = new URL(text);
     if (url.protocol !== 'https:' || url.username || url.password) return '';
@@ -216,6 +216,21 @@ function safeNoticeUrl(value) {
   } catch (_err) {
     return '';
   }
+}
+
+function noticeFileId(value) {
+  const match = String(value || '').match(/\/api\/files\/([a-f0-9]{24})/i);
+  return match ? match[1] : '';
+}
+
+async function realNoticeUrl(code, value) {
+  const safe = safeNoticeUrl(value);
+  if (!safe) return '';
+  const fileId = noticeFileId(safe);
+  if (!fileId) return safe;
+  const file = await NoticeFile.findById(fileId).select('code').lean();
+  if (!file || (code && file.code !== code)) return '';
+  return safe;
 }
 
 function randomCode() {
@@ -583,7 +598,7 @@ app.get('/api/lookup', limitLookup, async (req, res) => {
       filingType: customer.filingType || '',
       address: customer.address || '',
       situationDetails: customer.situationDetails || '',
-      noticeFileUrl: safeNoticeUrl(customer.noticeFileUrl),
+      noticeFileUrl: await realNoticeUrl(code, customer.noticeFileUrl),
     });
   } catch (err) {
     console.error('[lifebacktax] Lookup failed:', err.message);
@@ -662,7 +677,7 @@ app.post('/api/lookup/submit', async (req, res) => {
     }
     if (!code) code = await generateUniqueCode(new Set());
 
-    const noticeFileUrl = safeNoticeUrl(body.noticeFileUrl);
+    const noticeFileUrl = await realNoticeUrl(code, body.noticeFileUrl);
     const update = {
       firstName: clip(body.firstName, 200),
       middleInitial: clip(body.middleInitial, 8),
@@ -698,7 +713,7 @@ app.post('/api/lookup/submit', async (req, res) => {
 
     return res.json({
       code: customer.code,
-      noticeFileUrl: safeNoticeUrl(customer.noticeFileUrl),
+      noticeFileUrl: await realNoticeUrl(customer.code, customer.noticeFileUrl),
     });
   } catch (err) {
     console.error('[lifebacktax] Form save failed:', err.message);
@@ -821,6 +836,10 @@ app.get('/api/customers', auth, async (_req, res) => {
       .sort({ submittedAt: -1, created_at: -1, _id: -1 })
       .select('-__v')
       .lean();
+
+    await Promise.all(customers.map(async (customer) => {
+      customer.noticeFileUrl = await realNoticeUrl(customer.code, customer.noticeFileUrl);
+    }));
 
     return res.json({ customers });
   } catch (err) {
