@@ -205,6 +205,18 @@ function sanitizeCode(value) {
     .trim();
 }
 
+function safeNoticeUrl(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text || text.length > 2000) return '';
+  try {
+    const url = new URL(text);
+    if (url.protocol !== 'https:' || url.username || url.password) return '';
+    return url.toString();
+  } catch (_err) {
+    return '';
+  }
+}
+
 function randomCode() {
   let code = '';
   for (let i = 0; i < CODE_LENGTH; i += 1) {
@@ -497,7 +509,7 @@ app.get('/api/lookup', limitLookup, async (req, res) => {
     }
 
     const customer = await Customer.findOne({ code })
-      .select('firstName middleInitial lastName email phone amountOwed debtAmount taxType stateName filingType address situationDetails')
+      .select('firstName middleInitial lastName email phone amountOwed debtAmount taxType stateName filingType address situationDetails noticeFileUrl')
       .lean();
 
     res.set('Cache-Control', 'no-store');
@@ -518,10 +530,34 @@ app.get('/api/lookup', limitLookup, async (req, res) => {
       filingType: customer.filingType || '',
       address: customer.address || '',
       situationDetails: customer.situationDetails || '',
+      noticeFileUrl: safeNoticeUrl(customer.noticeFileUrl),
     });
   } catch (err) {
     console.error('[lifebacktax] Lookup failed:', err.message);
     return res.status(500).json({ message: 'Lookup failed' });
+  }
+});
+
+app.post('/api/lookup/notice', async (req, res) => {
+  try {
+    const code = sanitizeCode(req.body && req.body.code);
+    const noticeFileUrl = safeNoticeUrl(req.body && req.body.noticeFileUrl);
+    if (!code || code.length > 128) {
+      return res.status(400).json({ message: 'A valid client code is required' });
+    }
+    if (!noticeFileUrl) {
+      return res.status(400).json({ message: 'A valid https notice file URL is required' });
+    }
+
+    const updated = await Customer.findOneAndUpdate({ code }, { noticeFileUrl }, { new: true }).lean();
+    if (!updated) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    return res.json({ noticeFileUrl: safeNoticeUrl(updated.noticeFileUrl) });
+  } catch (err) {
+    console.error('[lifebacktax] Notice save failed:', err.message);
+    return res.status(500).json({ message: 'Unable to save the notice file' });
   }
 });
 

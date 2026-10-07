@@ -35,6 +35,14 @@ function text(value) {
   return raw || '—';
 }
 
+function noticeKind(value) {
+  const url = String(value || '').trim().toLowerCase();
+  if (!url) return '';
+  if (url.includes('.pdf')) return 'pdf';
+  if (/\.(png|jpe?g|gif|webp)(\?|$)/.test(url)) return 'image';
+  return 'file';
+}
+
 async function copyText(value) {
   try {
     if (navigator.clipboard && window.isSecureContext) {
@@ -240,6 +248,9 @@ export default function RecordsPage() {
                         {displayName(record)}
                       </button>
                       <p className="mt-1 text-xs text-slate-500">{text(record.filingType)}</p>
+                      {record.noticeFileUrl ? (
+                        <p className="mt-1 text-xs font-semibold text-teal">Notice attached</p>
+                      ) : null}
                     </td>
                     <td className="px-4 py-4">
                       <p>{text(record.email)}</p>
@@ -323,16 +334,32 @@ export default function RecordsPage() {
                   <dd className="mt-1 text-sm text-ink">{text(selected[key])}</dd>
                 </div>
               ))}
-              {selected.noticeFileUrl ? (
-                <div>
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notice file</dt>
-                  <dd className="mt-1">
-                    <a href={selected.noticeFileUrl} target="_blank" rel="noreferrer" className="break-all text-sm font-semibold text-teal hover:underline">
-                      {selected.noticeFileUrl}
-                    </a>
-                  </dd>
-                </div>
-              ) : null}
+              <div className="rounded-xl border border-slate-200 p-3">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Notice file</dt>
+                <dd className="mt-2">
+                  {selected.noticeFileUrl ? (
+                    <div className="space-y-3">
+                      {noticeKind(selected.noticeFileUrl) === 'image' ? (
+                        <img
+                          src={selected.noticeFileUrl}
+                          alt="Customer notice"
+                          className="max-h-64 w-full rounded-lg border border-slate-200 object-contain bg-mist"
+                        />
+                      ) : null}
+                      <a
+                        href={selected.noticeFileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex rounded-full bg-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-ink"
+                      >
+                        {noticeKind(selected.noticeFileUrl) === 'pdf' ? 'Open PDF' : 'Open notice file'}
+                      </a>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">No notice file for this client.</p>
+                  )}
+                </dd>
+              </div>
             </dl>
           </aside>
         </div>
