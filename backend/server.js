@@ -497,7 +497,7 @@ app.get('/api/lookup', limitLookup, async (req, res) => {
     }
 
     const customer = await Customer.findOne({ code })
-      .select('firstName lastName email phone amountOwed debtAmount address')
+      .select('firstName middleInitial lastName email phone amountOwed debtAmount taxType stateName filingType address situationDetails')
       .lean();
 
     res.set('Cache-Control', 'no-store');
@@ -508,11 +508,16 @@ app.get('/api/lookup', limitLookup, async (req, res) => {
 
     return res.json({
       firstName: customer.firstName || '',
+      middleInitial: customer.middleInitial || '',
       lastName: customer.lastName || '',
       email: customer.email || '',
       phone: customer.phone || '',
       debtAmount: customer.amountOwed || customer.debtAmount || '',
+      taxType: customer.taxType || '',
+      stateName: customer.stateName || '',
+      filingType: customer.filingType || '',
       address: customer.address || '',
+      situationDetails: customer.situationDetails || '',
     });
   } catch (err) {
     console.error('[lifebacktax] Lookup failed:', err.message);
