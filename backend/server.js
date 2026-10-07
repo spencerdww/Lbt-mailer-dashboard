@@ -621,7 +621,8 @@ app.post('/api/lookup/file', handleNoticeUpload, async (req, res) => {
       data: req.file.buffer,
     });
 
-    const noticeFileUrl = `${publicBase(req)}/api/files/${saved.id}?type=${kind}`;
+    const extension = kind === 'pdf' ? 'pdf' : 'jpg';
+    const noticeFileUrl = `${publicBase(req)}/api/files/${saved.id}.${extension}`;
     await Customer.updateOne({ code }, { noticeFileUrl });
     return res.status(201).json({ noticeFileUrl });
   } catch (err) {
@@ -632,11 +633,12 @@ app.post('/api/lookup/file', handleNoticeUpload, async (req, res) => {
 
 app.get('/api/files/:id', async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    const fileId = String(req.params.id || '').replace(/\.(pdf|jpe?g|png|gif|webp)$/i, '');
+    if (!mongoose.Types.ObjectId.isValid(fileId)) {
       return res.status(404).json({ message: 'File not found' });
     }
 
-    const file = await NoticeFile.findById(req.params.id);
+    const file = await NoticeFile.findById(fileId);
     if (!file) {
       return res.status(404).json({ message: 'File not found' });
     }
