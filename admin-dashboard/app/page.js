@@ -103,7 +103,7 @@ export default function LoginPage() {
       window.localStorage.setItem(TOKEN_KEY, data.token);
       router.push('/dashboard');
     } catch (_err) {
-      setError('Cannot reach the API. Confirm the backend is running on port 5000.');
+      setError('Cannot reach the API. Check that the API project is deployed and NEXT_PUBLIC_API_URL has no extra space.');
     } finally {
       setSubmitting(false);
     }

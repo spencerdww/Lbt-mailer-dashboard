@@ -36,7 +36,7 @@ export default function HistoryPage() {
         }
         setImports(Array.isArray(data.imports) ? data.imports : []);
       } catch (_err) {
-        if (active) setError('Cannot reach the API. Confirm the backend is running on port 5000.');
+        if (active) setError('Cannot reach the API. Check that the API project is deployed and NEXT_PUBLIC_API_URL has no extra space.');
       } finally {
         if (active) setLoading(false);
       }
@@ -70,7 +70,7 @@ export default function HistoryPage() {
           : 'Sheet removed from history.'
       );
     } catch (_err) {
-      setError('Cannot reach the API. Confirm the backend is running on port 5000.');
+      setError('Cannot reach the API. Check that the API project is deployed and NEXT_PUBLIC_API_URL has no extra space.');
     } finally {
       setRemovingId('');
     }

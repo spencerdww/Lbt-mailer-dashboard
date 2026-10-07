@@ -101,7 +101,7 @@ export default function RecordsPage() {
         }
         setRecords(Array.isArray(data.customers) ? data.customers : []);
       } catch (_err) {
-        if (active) setError('Cannot reach the API. Confirm the backend is running on port 5000.');
+        if (active) setError('Cannot reach the API. Check that the API project is deployed and NEXT_PUBLIC_API_URL has no extra space.');
       } finally {
         if (active) setLoading(false);
       }
@@ -152,7 +152,7 @@ export default function RecordsPage() {
       setSelected((current) => (current && current.code === record.code ? null : current));
       setNotice(`${name} was removed.`);
     } catch (_err) {
-      setError('Cannot reach the API. Confirm the backend is running on port 5000.');
+      setError('Cannot reach the API. Check that the API project is deployed and NEXT_PUBLIC_API_URL has no extra space.');
     } finally {
       setRemovingCode('');
     }
