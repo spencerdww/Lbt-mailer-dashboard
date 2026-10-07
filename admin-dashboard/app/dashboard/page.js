@@ -43,6 +43,18 @@ function noticeKind(value) {
   return 'file';
 }
 
+function downloadUrl(value) {
+  const url = String(value || '').trim();
+  if (!url) return '';
+  if (url.includes('/api/files/')) {
+    return url.includes('?') ? `${url}&download=1` : `${url}?download=1`;
+  }
+  if (url.includes('res.cloudinary.com') && url.includes('/upload/') && !url.includes('fl_attachment')) {
+    return url.replace('/upload/', '/upload/fl_attachment/');
+  }
+  return url;
+}
+
 async function copyText(value) {
   try {
     if (navigator.clipboard && window.isSecureContext) {
@@ -347,12 +359,11 @@ export default function RecordsPage() {
                         />
                       ) : null}
                       <a
-                        href={selected.noticeFileUrl}
-                        target="_blank"
-                        rel="noreferrer"
+                        href={downloadUrl(selected.noticeFileUrl)}
+                        download
                         className="inline-flex rounded-full bg-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-ink"
                       >
-                        {noticeKind(selected.noticeFileUrl) === 'pdf' ? 'Open PDF' : 'Open notice file'}
+                        {noticeKind(selected.noticeFileUrl) === 'pdf' ? 'Download PDF' : 'Download notice file'}
                       </a>
                     </div>
                   ) : (

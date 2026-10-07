@@ -642,8 +642,9 @@ app.get('/api/files/:id', async (req, res) => {
       return res.status(404).json({ message: 'File not found' });
     }
 
+    const download = req.query.download === '1';
     res.set('Content-Type', file.mimeType);
-    res.set('Content-Disposition', `inline; filename="${safeFileName(file.originalName, file.kind)}"`);
+    res.set('Content-Disposition', `${download ? 'attachment' : 'inline'}; filename="${safeFileName(file.originalName, file.kind)}"`);
     res.set('Cache-Control', 'private, max-age=300');
     return res.send(file.data);
   } catch (err) {
