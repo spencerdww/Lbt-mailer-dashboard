@@ -593,8 +593,8 @@ app.get('/api/lookup', limitLookup, async (req, res) => {
 
 app.post('/api/lookup/file', handleNoticeUpload, async (req, res) => {
   try {
-    const code = sanitizeCode(req.body && req.body.code);
-    if (!code || code.length > 128) {
+    let code = sanitizeCode(req.body && req.body.code);
+    if (code && code.length > 128) {
       return res.status(400).json({ message: 'A valid client code is required' });
     }
     if (!req.file || !req.file.buffer) {
@@ -606,10 +606,9 @@ app.post('/api/lookup/file', handleNoticeUpload, async (req, res) => {
       return res.status(400).json({ message: 'Only PDF and image files are allowed' });
     }
 
+    if (!code) code = await generateUniqueCode(new Set());
     const customer = await Customer.findOne({ code }).select('_id').lean();
-    if (!customer) {
-      return res.status(404).json({ message: 'Customer not found' });
-    }
+    if (!customer) await Customer.create({ code });
 
     await NoticeFile.deleteMany({ code });
     const saved = await NoticeFile.create({
@@ -624,7 +623,7 @@ app.post('/api/lookup/file', handleNoticeUpload, async (req, res) => {
     const extension = kind === 'pdf' ? 'pdf' : 'jpg';
     const noticeFileUrl = `${publicBase(req)}/api/files/${saved.id}.${extension}`;
     await Customer.updateOne({ code }, { noticeFileUrl });
-    return res.status(201).json({ noticeFileUrl });
+    return res.status(201).json({ code, noticeFileUrl });
   } catch (err) {
     console.error('[lifebacktax] Notice upload failed:', err.message);
     return res.status(500).json({ message: 'Unable to save the notice file' });
@@ -650,6 +649,59 @@ app.get('/api/files/:id', async (req, res) => {
   } catch (err) {
     console.error('[lifebacktax] Notice read failed:', err.message);
     return res.status(500).json({ message: 'Unable to open the notice file' });
+  }
+});
+
+app.post('/api/lookup/submit', async (req, res) => {
+  try {
+    const body = req.body || {};
+    let code = sanitizeCode(body.code);
+    if (code && code.length > 128) {
+      return res.status(400).json({ message: 'A valid client code is required' });
+    }
+    if (!code) code = await generateUniqueCode(new Set());
+
+    const noticeFileUrl = safeNoticeUrl(body.noticeFileUrl);
+    const update = {
+      firstName: clip(body.firstName, 200),
+      middleInitial: clip(body.middleInitial, 8),
+      lastName: clip(body.lastName, 200),
+      email: clip(body.email, 320),
+      phone: clip(body.phone, 40),
+      amountOwed: clip(body.amountOwed, 80),
+      debtAmount: clip(body.amountOwed, 80),
+      taxType: clip(body.taxType, 40),
+      stateName: clip(body.stateName, 80),
+      filingType: clip(body.filingType, 40),
+      situationDetails: clip(body.situationDetails, 4000),
+      runInvestigation: clip(body.runInvestigation, 300),
+      address: clip(body.address, 500),
+      isJoint: clip(body.isJoint, 80),
+    };
+
+    const ssn = clip(body.ssn, 20);
+    const dob = clip(body.dob, 40);
+    const spouseInfo = clip(body.spouseInfo, 300);
+    const businessEin = clip(body.businessEin, 200);
+    if (ssn) update.ssn = ssn;
+    if (dob) update.dob = dob;
+    if (spouseInfo) update.spouseInfo = spouseInfo;
+    if (businessEin) update.businessEin = businessEin;
+    if (noticeFileUrl) update.noticeFileUrl = noticeFileUrl;
+
+    const customer = await Customer.findOneAndUpdate(
+      { code },
+      { $set: update, $setOnInsert: { code, created_at: new Date() } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    ).lean();
+
+    return res.json({
+      code: customer.code,
+      noticeFileUrl: safeNoticeUrl(customer.noticeFileUrl),
+    });
+  } catch (err) {
+    console.error('[lifebacktax] Form save failed:', err.message);
+    return res.status(500).json({ message: 'Unable to save the form' });
   }
 });
 
