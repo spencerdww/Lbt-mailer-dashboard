@@ -113,6 +113,8 @@ export default function RecordsPage() {
   const [copiedCode, setCopiedCode] = useState('');
   const [notice, setNotice] = useState('');
   const [removingCode, setRemovingCode] = useState('');
+  const [checked, setChecked] = useState([]);
+  const [removingSelected, setRemovingSelected] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -175,12 +177,57 @@ export default function RecordsPage() {
         return;
       }
       setRecords((current) => current.filter((row) => row.code !== record.code));
+      setChecked((current) => current.filter((code) => code !== record.code));
       setSelected((current) => (current && current.code === record.code ? null : current));
       setNotice(`${name} was removed.`);
     } catch (_err) {
       setError('Cannot reach the API. Check that the API project is deployed and NEXT_PUBLIC_API_URL has no extra space.');
     } finally {
       setRemovingCode('');
+    }
+  }
+
+  const filteredCodes = filtered.map((record) => record.code);
+  const allFilteredChecked = filteredCodes.length > 0 && filteredCodes.every((code) => checked.includes(code));
+
+  function toggleCode(code) {
+    setChecked((current) => (current.includes(code) ? current.filter((item) => item !== code) : [...current, code]));
+  }
+
+  function toggleFiltered() {
+    setChecked((current) => {
+      if (allFilteredChecked) return current.filter((code) => !filteredCodes.includes(code));
+      return [...new Set([...current, ...filteredCodes])];
+    });
+  }
+
+  async function removeSelected() {
+    if (!checked.length || removingSelected) return;
+    const confirmed = window.confirm(`Delete ${checked.length} selected client${checked.length === 1 ? '' : 's'}?`);
+    if (!confirmed) return;
+
+    setRemovingSelected(true);
+    setError('');
+    setNotice('');
+    try {
+      const response = await api('/api/customers/bulk-delete', {
+        method: 'POST',
+        body: JSON.stringify({ codes: checked }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.message || 'Unable to remove the selected clients');
+        return;
+      }
+      const removed = new Set(Array.isArray(data.codes) ? data.codes : checked);
+      setRecords((current) => current.filter((row) => !removed.has(row.code)));
+      setChecked([]);
+      setSelected((current) => (current && removed.has(current.code) ? null : current));
+      setNotice(`${data.removed || removed.size} client${(data.removed || removed.size) === 1 ? '' : 's'} deleted.`);
+    } catch (_err) {
+      setError('Cannot reach the API. Check that the API project is deployed and NEXT_PUBLIC_API_URL has no extra space.');
+    } finally {
+      setRemovingSelected(false);
     }
   }
 
@@ -228,11 +275,35 @@ export default function RecordsPage() {
         </p>
       )}
 
+      {checked.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-semibold text-red-800">{checked.length} selected</p>
+          <button
+            type="button"
+            onClick={removeSelected}
+            disabled={removingSelected}
+            className="rounded-full bg-red-700 px-4 py-2 text-sm font-bold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {removingSelected ? 'Deleting...' : 'Delete selected'}
+          </button>
+        </div>
+      )}
+
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="bg-mist text-xs uppercase tracking-wide text-slate-500">
               <tr>
+                <th className="w-12 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all shown clients"
+                    checked={allFilteredChecked}
+                    onChange={toggleFiltered}
+                    disabled={loading || filtered.length === 0}
+                    className="h-4 w-4 accent-navy"
+                  />
+                </th>
                 <th className="px-4 py-3 font-semibold">Client</th>
                 <th className="px-4 py-3 font-semibold">Contact</th>
                 <th className="px-4 py-3 font-semibold">Tax case</th>
@@ -245,7 +316,7 @@ export default function RecordsPage() {
             <tbody>
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
                     {records.length === 0 ? 'No records yet. Import a mailer CSV to get started.' : 'No records match that search.'}
                   </td>
                 </tr>
@@ -254,6 +325,15 @@ export default function RecordsPage() {
                 const url = unbounceUrl(record.code);
                 return (
                   <tr key={record.code} className="border-t border-slate-100 align-top hover:bg-mist/70">
+                    <td className="px-4 py-4">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${displayName(record)}`}
+                        checked={checked.includes(record.code)}
+                        onChange={() => toggleCode(record.code)}
+                        className="h-4 w-4 accent-navy"
+                      />
+                    </td>
                     <td className="px-4 py-4">
                       <button
                         type="button"
