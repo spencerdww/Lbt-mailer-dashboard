@@ -38,8 +38,8 @@ function text(value) {
 function noticeKind(value) {
   const url = String(value || '').trim().toLowerCase();
   if (!url) return '';
-  if (url.includes('.pdf')) return 'pdf';
-  if (/\.(png|jpe?g|gif|webp)(\?|$)/.test(url)) return 'image';
+  if (url.includes('.pdf') || url.includes('type=pdf')) return 'pdf';
+  if (/\.(png|jpe?g|gif|webp)(\?|$)/.test(url) || url.includes('type=image')) return 'image';
   return 'file';
 }
 

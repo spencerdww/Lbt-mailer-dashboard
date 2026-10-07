@@ -14,6 +14,7 @@ const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 const Customer = require('./models/Customer');
 const ImportHistory = require('./models/ImportHistory');
+const NoticeFile = require('./models/NoticeFile');
 const auth = require('./middleware/auth');
 
 const PORT = Number(process.env.PORT) || 5000;
@@ -438,6 +439,58 @@ const upload = multer({
   },
 });
 
+const noticeUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024, files: 1 },
+});
+
+function noticeKindOf(file) {
+  const name = (file.originalname || '').toLowerCase();
+  const type = (file.mimetype || '').toLowerCase();
+  if (type === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
+  if (type === 'image/jpeg' || type === 'image/png' || type === 'image/gif' || type === 'image/webp') return 'image';
+  if (/\.(png|jpe?g|gif|webp)$/.test(name)) return 'image';
+  return '';
+}
+
+function noticeMime(kind, file) {
+  const type = (file.mimetype || '').toLowerCase();
+  if (kind === 'pdf') return 'application/pdf';
+  if (type.startsWith('image/')) return type;
+  const name = (file.originalname || '').toLowerCase();
+  if (name.endsWith('.png')) return 'image/png';
+  if (name.endsWith('.gif')) return 'image/gif';
+  if (name.endsWith('.webp')) return 'image/webp';
+  return 'image/jpeg';
+}
+
+function safeFileName(name, kind) {
+  const base = String(name || 'notice')
+    .replace(/[/\\]/g, '')
+    .replace(/[^\w.\- ]+/g, '')
+    .trim()
+    .slice(0, 180);
+  if (base) return base;
+  return kind === 'pdf' ? 'notice.pdf' : 'notice.jpg';
+}
+
+function publicBase(req) {
+  const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+  const host = req.get('x-forwarded-host') || req.get('host');
+  return `${proto}://${host}`;
+}
+
+function handleNoticeUpload(req, res, next) {
+  noticeUpload.single('file')(req, res, (err) => {
+    if (!err) return next();
+    const message =
+      err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE'
+        ? 'Notice file exceeds the 4 MB limit'
+        : err.message || 'Upload failed';
+    return res.status(400).json({ message });
+  });
+}
+
 function handleUpload(req, res, next) {
   upload.single('file')(req, res, (err) => {
     if (!err) return next();
@@ -535,6 +588,66 @@ app.get('/api/lookup', limitLookup, async (req, res) => {
   } catch (err) {
     console.error('[lifebacktax] Lookup failed:', err.message);
     return res.status(500).json({ message: 'Lookup failed' });
+  }
+});
+
+app.post('/api/lookup/file', handleNoticeUpload, async (req, res) => {
+  try {
+    const code = sanitizeCode(req.body && req.body.code);
+    if (!code || code.length > 128) {
+      return res.status(400).json({ message: 'A valid client code is required' });
+    }
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ message: 'Choose a PDF or image' });
+    }
+
+    const kind = noticeKindOf(req.file);
+    if (!kind) {
+      return res.status(400).json({ message: 'Only PDF and image files are allowed' });
+    }
+
+    const customer = await Customer.findOne({ code }).select('_id').lean();
+    if (!customer) {
+      return res.status(404).json({ message: 'Customer not found' });
+    }
+
+    await NoticeFile.deleteMany({ code });
+    const saved = await NoticeFile.create({
+      code,
+      originalName: safeFileName(req.file.originalname, kind),
+      mimeType: noticeMime(kind, req.file),
+      kind,
+      size: req.file.size,
+      data: req.file.buffer,
+    });
+
+    const noticeFileUrl = `${publicBase(req)}/api/files/${saved.id}?type=${kind}`;
+    await Customer.updateOne({ code }, { noticeFileUrl });
+    return res.status(201).json({ noticeFileUrl });
+  } catch (err) {
+    console.error('[lifebacktax] Notice upload failed:', err.message);
+    return res.status(500).json({ message: 'Unable to save the notice file' });
+  }
+});
+
+app.get('/api/files/:id', async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    const file = await NoticeFile.findById(req.params.id);
+    if (!file) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
+    res.set('Content-Type', file.mimeType);
+    res.set('Content-Disposition', `inline; filename="${safeFileName(file.originalName, file.kind)}"`);
+    res.set('Cache-Control', 'private, max-age=300');
+    return res.send(file.data);
+  } catch (err) {
+    console.error('[lifebacktax] Notice read failed:', err.message);
+    return res.status(500).json({ message: 'Unable to open the notice file' });
   }
 });
 
